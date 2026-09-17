@@ -1,0 +1,42 @@
+services:
+  server:
+    build: ./server
+    container_name: battleship-server
+    ports:
+      - "8080:8080"
+    networks:
+      - battleship-net
+    restart: unless-stopped
+
+  # I due client sono interattivi: si avviano con
+  #   docker compose run --rm client1
+  #   docker compose run --rm client2
+  # (in due terminali diversi). stdin_open + tty servono per poter
+  # digitare i comandi dentro il container.
+  client1:
+    build: ./client
+    depends_on:
+      - server
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=8080
+    networks:
+      - battleship-net
+    stdin_open: true
+    tty: true
+
+  client2:
+    build: ./client
+    depends_on:
+      - server
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=8080
+    networks:
+      - battleship-net
+    stdin_open: true
+    tty: true
+
+networks:
+  battleship-net:
+    driver: bridge
