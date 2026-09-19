@@ -47,11 +47,7 @@ static int get_player_game_id(Player *player) {
     return id;
 }
 
-/*
- * MODIFICA: prima nessun comando controllava il login. Un client poteva
- * fare CREATE_GAME senza essersi mai autenticato. Adesso tutti i comandi
- * tranne LOGIN e QUIT passano da qui.
- */
+
 static bool require_login(Player *player) {
     if (get_player_state(player) == PLAYER_CONNECTED) {
         send_error(player, ERR_NOT_LOGGED_IN);
@@ -269,9 +265,7 @@ static void handle_join_game(GameManager *gm, Player *player, const Message *msg
 
     pthread_mutex_lock(&g->lock);
 
-    /* MODIFICA: non ci si puo' unire alla propria partita.
-       Prima era possibile: creator_id == opponent_id e la partita
-       restava bloccata per sempre. */
+    /* MODIFICA: non ci si puo' unire alla propria partita.*/
     if (g->creator_id == player->id) {
         pthread_mutex_unlock(&g->lock);
         send_error(player, ERR_CANNOT_JOIN_OWN_GAME);
@@ -349,12 +343,6 @@ static void handle_accept_invite(GameManager *gm, Player *player, const Message 
 
     pthread_mutex_lock(&g->lock);
 
-    /*
-     * MODIFICA CHIAVE: prima ACCEPT_INVITE non guardava mai
-     * pending_invite_from, quindi il creatore poteva trascinare in partita
-     * un giocatore che non aveva mai chiesto di entrare.
-     * Ora accettiamo SOLO chi ha realmente inviato la richiesta.
-     */
     if (g->state != GAME_WAITING_PLAYERS ||
         g->creator_id != player->id ||
         g->pending_invite_from != requester->id) {
