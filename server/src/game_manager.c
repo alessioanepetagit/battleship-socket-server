@@ -5,21 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-/*
- * MODIFICA CHIAVE DI QUESTO FILE
- * ------------------------------
- * Prima: gm_remove_player() / gm_remove_game() facevano pthread_mutex_destroy()
- * sul lock dello slot. Ma gm_get_player()/gm_get_game() restituiscono un
- * puntatore DOPO aver rilasciato il lock globale: un altro thread poteva
- * quindi trovarsi in mano un puntatore a uno slot il cui mutex era appena
- * stato distrutto (undefined behavior) o reinizializzato da una nuova
- * connessione.
- *
- * Adesso: i MAX_PLAYERS + MAX_GAMES mutex vengono creati UNA VOLTA SOLA in
- * gm_init() e distrutti UNA VOLTA SOLA in gm_destroy(), alla chiusura del
- * server. Gli slot vengono solo svuotati (id = -1) e riusati. Il mutex di
- * uno slot e' quindi sempre valido per tutta la vita del processo.
- */
+
 
 void gm_init(GameManager *gm) {
     if (!gm) return;
@@ -149,12 +135,7 @@ Player* gm_get_player_by_username(GameManager *gm, const char *username) {
     return found;
 }
 
-/*
- * Race condition tra check-username e write-username:
- * teniamo players_lock per tutta l'operazione di verifica unicita' +
- * scrittura, cosi' nessun altro thread puo' registrare lo stesso username
- * nel mezzo.
- */
+
 bool gm_set_username(GameManager *gm, int player_id, const char *username) {
     if (!gm || player_id <= 0 || !username || strlen(username) == 0) return false;
 
@@ -181,7 +162,6 @@ bool gm_set_username(GameManager *gm, int player_id, const char *username) {
     return true;
 }
 
-/* MODIFICA: lettura protetta dello username (prima veniva letto senza lock) */
 void gm_copy_username(Player *player, char *out, size_t out_size) {
     if (!out || out_size == 0) return;
     out[0] = '\0';
@@ -263,14 +243,12 @@ void gm_remove_game(GameManager *gm, int game_id) {
         gm->games[index].pending_invite_from = -1;
         gm->games[index].game_code[0] = '\0';
         pthread_mutex_unlock(&gm->games[index].lock);
-        /* MODIFICA: niente pthread_mutex_destroy qui */
         gm->game_count--;
         printf("[MANAGER] Partita %d rimossa, slot liberato\n", game_id);
     }
     pthread_mutex_unlock(&gm->games_lock);
 }
 
-/* MODIFICA: copiamo solo id/codice/creatore, non l'intera struct con il mutex */
 int gm_get_available_games(GameManager *gm, GameInfo *out_games, int max_results) {
     if (!gm || !out_games || max_results <= 0) return 0;
 

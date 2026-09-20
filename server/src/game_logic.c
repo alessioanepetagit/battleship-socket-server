@@ -42,7 +42,6 @@ void init_player(Player *player, int id, int socket_fd) {
     player->wants_rematch = false;
 
     init_board(&player->board);
-    /* MODIFICA: niente pthread_mutex_init qui, lo fa gm_init() una volta sola */
 }
 
 void init_game(Game *game, int id, int creator_id) {
@@ -63,14 +62,9 @@ void init_game(Game *game, int id, int creator_id) {
     game->created_at = time(NULL);
     game->last_activity = time(NULL);
 
-    /* MODIFICA: niente pthread_mutex_init qui, lo fa gm_init() una volta sola */
 }
 
-/*
- * MODIFICA: rimette la partita nello stato "posizionamento navi" tenendo
- * gli stessi due giocatori. Serve per la rivincita richiesta dalla traccia.
- * Il chiamante deve avere gia' acquisito game->lock.
- */
+
 void reset_game_for_rematch(Game *game) {
     if (!game) return;
 
