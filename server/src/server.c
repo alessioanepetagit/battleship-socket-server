@@ -51,14 +51,16 @@ bool server_init(Server *server, int port) {
         perror("[SERVER] Errore creazione socket");
         return false;
     }
-
+//Facciamo in kodo di permettere più facilmente il riutilizzo
+// della porta 8080 dopo la chiusura del server.
     int opt = 1;
     if (setsockopt(server->server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("[SERVER] Errore setsockopt SO_REUSEADDR");
         close(server->server_socket);
         return false;
     }
-
+//Struttura che contiene le informazioni necessarie
+//per associare il socket a un indirizzo di rete
     struct sockaddr_in address;
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
