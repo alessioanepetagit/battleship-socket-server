@@ -66,13 +66,13 @@ bool server_init(Server *server, int port) {
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(server->port);
-
+//bind() associa il socket a un indirizzo IP e una porta specifici
     if (bind(server->server_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
         perror("[SERVER] Errore bind socket");
         close(server->server_socket);
         return false;
     }
-
+//listen() mette il socket in modalità di ascolto per le connessioni in arrivo
     if (listen(server->server_socket, BACKLOG) < 0) {
         perror("[SERVER] Errore listen socket");
         close(server->server_socket);
@@ -110,29 +110,38 @@ void server_start(Server *server) {
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
         printf("[SERVER] Nuova connessione da %s:%d (FD %d)\n", client_ip, ntohs(client_addr.sin_port), client_fd);
-
+//Allochiamo dinamicamente la struttura ThreadArgs per passare le informazioni al thread
         ThreadArgs *args = malloc(sizeof(ThreadArgs));
         if (!args) {
             perror("[SERVER] Errore malloc ThreadArgs");
             close(client_fd);
             continue;
         }
-        args->socket_fd = client_fd;
-        args->gm = &server->gm;
-
+        args->socket_fd = client_fd; //La struttura del thread contiene il socket del client
+        args->gm = &server->gm; //un puntatore al gestore delle partite condivise
+//Creiamo concretamente il thread che gestirà la comunicazione con il client
         pthread_t thread_id;
-        if (pthread_create(&thread_id, NULL, client_handler_thread, args) != 0) {
+        if (pthread_create(&thread_id, NULL, client_handler_thread, args) != 0) { 
+            //&thred_id è dove salvare l'identificatore del thread, NULL sono gli attributi predefiniti
+            //client_handler_thread è la funzione che il thread eseguirà, args sono gli argomenti passati alla funzione
             perror("[SERVER] Errore creazione thread worker");
             free(args);
             close(client_fd);
             continue;
         }
-
+//pthread_detach() permette al thread di liberare automaticamente le risorse quando termina
         pthread_detach(thread_id);
     }
 }
 
-void server_stop(Server *server) {
+/*Gestisce la chiusura del server, chiudendo il socket e liberando le risorse allocate.  
+SIGINT è il segnale generato quando l'utente preme Ctrl+C 
+ SIGTERM è un segnale di terminazione che può essere inviato da altri processi.
+Quando arriva uno di questi segnali, il gestore di segnali handle_signal() viene chiamato, 
+che a sua volta chiama server_stop() per fermare il server in modo sicuro.
+
+ */
+void server_stop(Server *server) { //variabile che punta al server attivo
     if (!server) return;
 
     server->running = false;
