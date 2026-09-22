@@ -46,7 +46,9 @@ void gm_destroy(GameManager *gm) {
     pthread_mutex_destroy(&gm->players_lock);
     pthread_mutex_destroy(&gm->games_lock);
 }
-
+//Mutual exclusion: per accedere a un giocatore o a una 
+// partita, bisogna prendere il lock del GameManager 
+// e poi il lock del giocatore/partita. 
 Player* gm_add_player(GameManager *gm, int socket_fd) {
     if (!gm || socket_fd < 0) return NULL;
 
