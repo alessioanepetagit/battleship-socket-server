@@ -4,6 +4,7 @@
 #include <string.h>
 
 int main(int argc, char *argv[]) {
+    setvbuf(stdout, NULL, _IONBF, 0);  // Disabilita il buffering di stdout
     int port = DEFAULT_PORT;
 
     for (int i = 1; i < argc; i++) {
