@@ -759,7 +759,7 @@ static void handle_rematch(GameManager *gm, Player *player) {
 }
  
 /*
- * MODIFICA: rifiuto della rivincita = "uscire definitivamente dalla
+ * rifiuto della rivincita = "uscire definitivamente dalla
  * sessione di gioco". La partita viene chiusa, lo slot liberato ed
  * entrambi tornano in lobby, pronti a creare NUOVE partite.
  */
@@ -776,10 +776,13 @@ static void handle_rematch_decline(GameManager *gm, Player *player) {
 /* ------------------------------------------------------------------ */
  
 void* client_handler_thread(void *arg) {
+    //Recupero gli argomenti passati al thread e 
+    // li libero subito dopo averli copiati in variabili locali.
     ThreadArgs *args = (ThreadArgs*)arg;
     int socket_fd = args->socket_fd;
     GameManager *gm = args->gm;
     free(args);
+ //Registro il client appena connesso nel GameManager. 
  
     Player *player = gm_add_player(gm, socket_fd);
     if (!player) {
@@ -795,22 +798,23 @@ void* client_handler_thread(void *arg) {
     Message msg;
     bool running = true;
  
-    while (running) {
+    while (running) { // ciclo principale di lettura continuo dei messaggi dal client 
         int bytes = receive_message(socket_fd, buffer, sizeof(buffer));
-        if (bytes <= 0) break;   /* read() == 0 -> EOF, il client ha chiuso */
- 
+        if (bytes <= 0) break;   // Se il client si disconnette o c'è un errore di lettura, esci dal ciclo
+        
+        //Il messaggio testuale ricevuto viene trasformato nella struttura msg
         if (!parse_message(buffer, &msg)) {
-            /* MODIFICA: prima i comandi sconosciuti venivano ignorati in
-               silenzio e il client restava in attesa di una risposta */
+            //Se il parsing fallisce manda errore al client
             send_error(player, ERR_INVALID_COMMAND);
             continue;
         }
  
-        /* MODIFICA: tutto tranne LOGIN e QUIT richiede l'autenticazione */
+        /* tutto tranne LOGIN e QUIT richiede l'autenticazione */
         if (msg.type != CMD_LOGIN && msg.type != CMD_QUIT && !require_login(player)) {
             continue;
         }
- 
+        //In base al tipo di comando ricevuto, viene chiamata 
+        // la funzione corrispondente per gestire il comando.
         switch (msg.type) {
             case CMD_LOGIN:
                 handle_login(gm, player, &msg);
@@ -856,7 +860,9 @@ void* client_handler_thread(void *arg) {
                 break;
         }
     }
- 
+ //Quando il thread termina:
+ // viene gestita la disconnessione del giocatore, 
+ // chiuso il socket e terminato il thread.
     handle_disconnect(gm, player);
     close(socket_fd);
     pthread_exit(NULL);
