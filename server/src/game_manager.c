@@ -250,7 +250,11 @@ void gm_remove_game(GameManager *gm, int game_id) {
     }
     pthread_mutex_unlock(&gm->games_lock);
 }
-
+//Notiamo che la funzione gm_get_available_games copia solo i campi essenziali
+//  della struct Game in una struct GameInfo, 
+// evitando di copiare il mutex e altri campi non necessari. 
+// Questo permette di restituire una lista di partite disponibili senza 
+// rischiare problemi di concorrenza o undefined behavior.
 int gm_get_available_games(GameManager *gm, GameInfo *out_games, int max_results) {
     if (!gm || !out_games || max_results <= 0) return 0;
 
