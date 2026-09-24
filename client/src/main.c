@@ -27,11 +27,7 @@ int main(int argc, char *argv[]) {
     const char *host = DEFAULT_SERVER_HOST;
     int port = DEFAULT_SERVER_PORT;
 
-    /*
-     * MODIFICA: dentro docker-compose e' comodo passare host e porta con le
-     * variabili d'ambiente. Gli argomenti da riga di comando, se presenti,
-     * hanno comunque la precedenza.
-     */
+ 
     const char *env_host = getenv("SERVER_HOST");
     const char *env_port = getenv("SERVER_PORT");
     if (env_host && strlen(env_host) > 0) host = env_host;

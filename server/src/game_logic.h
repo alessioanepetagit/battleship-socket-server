@@ -21,7 +21,7 @@ typedef enum {
 
 typedef enum {
     PLAYER_DISCONNECTED = 0,
-    PLAYER_CONNECTED,          /* MODIFICA: connesso ma NON ancora loggato */
+    PLAYER_CONNECTED,          /* connesso ma NON ancora loggato */
     PLAYER_LOBBY,
     PLAYER_WAITING_OPPONENT,
     PLAYER_INVITED,
@@ -102,19 +102,17 @@ typedef enum {
 void init_board(Board *board);
 
 /*
- * MODIFICA IMPORTANTE:
+
  * init_player() e init_game() NON inizializzano piu' il mutex della struttura.
  * I mutex degli slot vengono creati una volta sola in gm_init() e distrutti
- * una volta sola in gm_destroy(). Prima venivano distrutti alla disconnessione
- * mentre un altro thread poteva ancora averne il puntatore -> undefined
- * behavior. Ora lo slot viene solo "svuotato" e riusato, ma il suo mutex resta
+ * una volta sola in gm_destroy(). Ora lo slot viene solo "svuotato" e riusato, ma il suo mutex resta
  * sempre valido per tutta la vita del server.
  */
 void init_player(Player *player, int id, int socket_fd);
 void init_game(Game *game, int id, int creator_id);
 void generate_game_code(char *code, size_t len);
 
-/* MODIFICA: azzera i flag della partita per far ripartire una nuova sfida
+/* azzera i flag della partita per far ripartire una nuova sfida
    fra gli stessi due giocatori. Il chiamante deve tenere game->lock. */
 void reset_game_for_rematch(Game *game);
 

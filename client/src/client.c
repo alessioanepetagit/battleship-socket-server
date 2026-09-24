@@ -11,7 +11,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>      /* MODIFICA: gethostbyname per risolvere "server" in Docker */
+#include <netdb.h>      
 #include <pthread.h>
 
 static const int SHIP_SIZES[5] = {5, 4, 3, 3, 2};
@@ -79,14 +79,7 @@ static void clear_boards(Client *client) {
     }
 }
 
-/*
- * ui_read_command() e' bloccante (fgets su stdin), ma lo stato del client
- * puo' cambiare in qualsiasi momento a causa dei messaggi che arrivano dal
- * receiver thread. Questa funzione aspetta l'input con un timeout breve
- * (100 ms) ricontrollando lo stato ad ogni giro: se lo stato cambia PRIMA
- * che l'utente prema invio, ritorniamo false senza leggere nulla, cosi' il
- * ciclo principale puo' ridispatchare subito al case corretto.
- */
+
 static bool wait_for_command(Client *client, ClientState expected_state, char *buffer, size_t buf_size) {
     printf(COLOR_CYAN "> " COLOR_RESET);
     fflush(stdout);
@@ -141,12 +134,7 @@ int client_connect(Client *client, const char *host, int port) {
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
 
-    /*
-     * MODIFICA: prima si usava solo inet_pton, che accetta esclusivamente
-     * indirizzi numerici. Dentro docker-compose pero' il server si chiama
-     * "server", quindi proviamo prima con inet_aton (indirizzo numerico) e
-     * in caso di fallimento risolviamo il nome con gethostbyname().
-     */
+
     if (inet_aton(host, &server_addr.sin_addr) == 0) {
         struct hostent *he = gethostbyname(host);
         if (!he || he->h_addrtype != AF_INET) {
@@ -268,8 +256,7 @@ static void handle_response(Client *client, const char *response) {
 
         } else if (client->state == CLIENT_WAITING_SERVER ||
                    client->state == CLIENT_GAME_OVER) {
-            /* MODIFICA: se la rivincita non e' possibile torniamo in lobby
-               invece di restare appesi come succedeva prima */
+            // se la rivincita non e' possibile torniamo in lobby
             client->state = CLIENT_IN_LOBBY;
             ui_show_lobby_menu();
         }
@@ -612,7 +599,7 @@ void client_run(Client *client) {
                 if (!wait_for_command(client, CLIENT_MY_TURN, input, sizeof(input))) continue;
 
                 if (strcmp(input, "quit") == 0) {
-                    client_send(client, "LEAVE_GAME\n");   /* MODIFICA */
+                    client_send(client, "LEAVE_GAME\n");   
                     client->state = CLIENT_WAITING_SERVER;
                 } else {
                     int row, col;

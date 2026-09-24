@@ -22,20 +22,20 @@ void gm_init(GameManager *gm) {
         gm->players[i].state = PLAYER_DISCONNECTED;
         gm->players[i].current_game_id = -1;
         gm->players[i].username[0] = '\0';
-        pthread_mutex_init(&gm->players[i].lock, NULL);   /* MODIFICA */
+        pthread_mutex_init(&gm->players[i].lock, NULL);   
     }
 
     for (int i = 0; i < MAX_GAMES; i++) {
         gm->games[i].id = -1;
         gm->games[i].state = GAME_FINISHED;
-        pthread_mutex_init(&gm->games[i].lock, NULL);     /* MODIFICA */
+        pthread_mutex_init(&gm->games[i].lock, NULL);     
     }
 }
 
 void gm_destroy(GameManager *gm) {
     if (!gm) return;
 
-    /* MODIFICA: qui e solo qui distruggiamo i mutex degli slot */
+    /* qui e solo qui distruggiamo i mutex degli slot */
     for (int i = 0; i < MAX_PLAYERS; i++) {
         pthread_mutex_destroy(&gm->players[i].lock);
     }
@@ -88,7 +88,6 @@ void gm_remove_player(GameManager *gm, int player_id) {
         gm->players[index].current_game_id = -1;
         gm->players[index].username[0] = '\0';
         pthread_mutex_unlock(&gm->players[index].lock);
-        /* MODIFICA: niente pthread_mutex_destroy qui */
         gm->player_count--;
     }
     pthread_mutex_unlock(&gm->players_lock);

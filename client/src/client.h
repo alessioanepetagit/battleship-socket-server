@@ -24,10 +24,6 @@ typedef enum {
     CLIENT_GAME_OVER,
     CLIENT_WAITING_LOGIN,
     CLIENT_WAITING_START,
-    /* MODIFICA: stato generico "ho mandato un comando, aspetto la risposta
-       del server" (usato per LEAVE_GAME, REMATCH e REMATCH_DECLINE).
-       Sostituisce il vecchio CLIENT_WAITING_REMATCH, che restava appeso
-       per sempre perche' il server non gestiva la rivincita. */
     CLIENT_WAITING_SERVER
 } ClientState;
 
@@ -40,7 +36,7 @@ typedef struct {
     char enemy_board[GRID_SIZE][GRID_SIZE];
     int ships_placed;
     char current_game_code[8];
-    bool opponent_wants_rematch;   /* MODIFICA: l'avversario ha gia' detto si' */
+    bool opponent_wants_rematch;   
     pthread_mutex_t ui_lock;
     pthread_mutex_t send_lock; /* protegge le write() sul socket: il thread
                                   principale e il receiver thread possono

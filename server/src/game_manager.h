@@ -8,9 +8,9 @@
 #define MAX_GAMES   32
 
 /*
- * MODIFICA: per la lista delle partite disponibili non copiamo piu' l'intera
- * struct Game (che contiene un pthread_mutex_t: copiarlo e' undefined
- * behavior). Copiamo solo i campi che servono davvero al client.
+ * per la lista delle partite disponibili non copiamo piu' l'intera
+ * struct Game (che contiene un pthread_mutex_t).
+ * Copiamo solo i campi che servono davvero al client.
  */
 typedef struct {
     int id;
@@ -38,7 +38,6 @@ Player* gm_get_player(GameManager *gm, int player_id);
 Player* gm_get_player_by_socket(GameManager *gm, int socket_fd);
 Player* gm_get_player_by_username(GameManager *gm, const char *username);
 bool gm_set_username(GameManager *gm, int player_id, const char *username);
-/* MODIFICA: copia thread-safe dello username (serve nei log e nelle notifiche) */
 void gm_copy_username(Player *player, char *out, size_t out_size);
 
 /* Gestione Partite */
