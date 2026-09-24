@@ -416,13 +416,13 @@ static void handle_response(Client *client, const char *response) {
         ui_show_boards(client);
         ui_show_game_over(false);
     } else if (strcmp(cmd, "PLAY_AGAIN_PROMPT") == 0) {
-        /* MODIFICA: e' il server a chiedere se si vuole rigiocare */
+        /* e' il server a chiedere se si vuole rigiocare */
         client->state = CLIENT_GAME_OVER;
         ui_prompt_rematch();
         printf("> ");
         fflush(stdout);
     } else if (strcmp(cmd, "REMATCH_REQUEST") == 0) {
-        /* MODIFICA: l'avversario ha gia' accettato, lo segnaliamo */
+        /* l'avversario ha gia' accettato, lo segnaliamo */
         client->opponent_wants_rematch = true;
         printf("\n" COLOR_YELLOW "  [RIVINCITA] L'avversario vuole rigiocare! Rispondi 'y' o 'n'.\n" COLOR_RESET);
         printf("> ");
@@ -430,7 +430,7 @@ static void handle_response(Client *client, const char *response) {
     } else if (strcmp(cmd, "REMATCH_REJECTED") == 0) {
         ui_show_error("L'avversario non vuole la rivincita.");
     } else if (strcmp(cmd, "BACK_TO_LOBBY") == 0) {
-        /* MODIFICA: il server conferma che la partita e' chiusa e che
+        /* il server conferma che la partita e' chiusa e che
            siamo di nuovo liberi di crearne o cercarne un'altra */
         client->opponent_wants_rematch = false;
         clear_boards(client);
@@ -557,12 +557,7 @@ void client_run(Client *client) {
                     }
                 } else if (strcmp(input, "q") == 0 || strcmp(input, "quit") == 0) {
                     if (client->state == CLIENT_WAITING_OPPONENT) {
-                        /*
-                         * MODIFICA: LEAVE_GAME al posto di QUIT_GAME.
-                         * Prima il server chiudeva il socket mentre il client
-                         * mostrava allegramente il menu della lobby.
-                         * Ora aspettiamo BACK_TO_LOBBY dal server.
-                         */
+          
                         client_send(client, "LEAVE_GAME\n");
                         client->state = CLIENT_WAITING_SERVER;
                     } else {
@@ -584,7 +579,7 @@ void client_run(Client *client) {
                     if (!wait_for_command(client, CLIENT_PLACING_SHIPS, input, sizeof(input))) break;
                     if (strlen(input) == 0) continue;
 
-                    /* MODIFICA: si puo' abbandonare anche durante il posizionamento */
+                    /* si puo' abbandonare anche durante il posizionamento */
                     if (strcmp(input, "quit") == 0) {
                         client_send(client, "LEAVE_GAME\n");
                         client->state = CLIENT_WAITING_SERVER;
@@ -637,12 +632,12 @@ void client_run(Client *client) {
                 if (!wait_for_command(client, CLIENT_GAME_OVER, input, sizeof(input))) continue;
 
                 if (strcmp(input, "y") == 0 || strcmp(input, "yes") == 0) {
-                    /* MODIFICA: ora il server gestisce davvero REMATCH */
+            
                     client_send(client, "REMATCH\n");
                     ui_show_status("Richiesta di rivincita inviata...");
                     client->state = CLIENT_WAITING_SERVER;
                 } else if (strcmp(input, "n") == 0 || strcmp(input, "no") == 0) {
-                    /* MODIFICA: REMATCH_DECLINE chiude la partita ma NON la
+                    /* REMATCH_DECLINE chiude la partita ma NON la
                        connessione: si torna in lobby e si puo' ricominciare */
                     client_send(client, "REMATCH_DECLINE\n");
                     client->state = CLIENT_WAITING_SERVER;
@@ -666,9 +661,7 @@ void client_run(Client *client) {
     client_disconnect(client);
     pthread_join(recv_thread, NULL);
 
-    /* MODIFICA: i mutex si distruggono qui, dopo la join del receiver
-       thread (prima client_disconnect li distruggeva mentre il receiver
-       thread poteva ancora usarli) */
+    // i mutex si distruggono qui, dopo la join del receiver thread
     pthread_mutex_destroy(&client->ui_lock);
     pthread_mutex_destroy(&client->send_lock);
 

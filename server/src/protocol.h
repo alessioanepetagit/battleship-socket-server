@@ -10,13 +10,7 @@
 #define MAX_PARAMS          10
 #define MAX_PARAM_LEN       256
 
-/*
- * MODIFICA: ripulito l'elenco dei comandi.
- * - tolti END_GAME e WAIT_NEW_PLAYER (erano dichiarati ma mai gestiti)
- * - aggiunto LEAVE_GAME: esce dalla PARTITA ma resta connesso (torna in lobby)
- * - QUIT_GAME rinominato QUIT: chiude davvero la sessione
- * L'ordine di questo enum deve combaciare con COMMAND_STRINGS in protocol.c
- */
+
 typedef enum {
     CMD_LOGIN,
     CMD_CREATE_GAME,
@@ -58,8 +52,8 @@ typedef enum {
     RSP_PLAY_AGAIN_PROMPT,
     RSP_REMATCH_REQUEST,
     RSP_REMATCH_REJECTED,
-    RSP_BACK_TO_LOBBY   /* MODIFICA: il server dice esplicitamente al client
-                           "sei di nuovo in lobby, la partita non c'e' piu'" */
+    RSP_BACK_TO_LOBBY   
+                           
 } ResponseType;
 
 typedef enum {
@@ -74,9 +68,9 @@ typedef enum {
     ERR_INVALID_COORDS = 303,
     ERR_ALREADY_FIRED = 304,
     ERR_REMATCH_NOT_AVAILABLE = 305,
-    ERR_NO_PENDING_INVITE = 306,   /* MODIFICA */
-    ERR_CANNOT_JOIN_OWN_GAME = 307,/* MODIFICA */
-    ERR_WRONG_STATE = 308,         /* MODIFICA */
+    ERR_NO_PENDING_INVITE = 306,   
+    ERR_CANNOT_JOIN_OWN_GAME = 307
+    ERR_WRONG_STATE = 308,         
     ERR_SHIP_OVERLAP = 400,
     ERR_SHIP_OUT_OF_BOUNDS = 401,
     ERR_SHIP_INVALID_SIZE = 402,

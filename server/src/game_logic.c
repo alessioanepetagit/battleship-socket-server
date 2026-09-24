@@ -35,13 +35,13 @@ void init_player(Player *player, int id, int socket_fd) {
     player->id = id;
     player->socket_fd = socket_fd;
     memset(player->username, 0, MAX_USERNAME);
-    /* MODIFICA: si parte da PLAYER_CONNECTED, non da PLAYER_LOBBY.
+    /* si parte da PLAYER_CONNECTED, non da PLAYER_LOBBY.
        Cosi' nessun comando di gioco passa prima della LOGIN. */
     player->state = PLAYER_CONNECTED;
-    player->current_game_id = -1;
+    player->current_game_id = -1;  //non appartiene a nessuna partita
     player->wants_rematch = false;
 
-    init_board(&player->board);
+    init_board(&player->board);  //ogni giocatore parte con board vuota
 }
 
 void init_game(Game *game, int id, int creator_id) {
@@ -51,10 +51,10 @@ void init_game(Game *game, int id, int creator_id) {
     generate_game_code(game->game_code, GAME_CODE_LEN);
     game->state = GAME_WAITING_PLAYERS;
     game->creator_id = creator_id;
-    game->opponent_id = -1;
+    game->opponent_id = -1; //perchè ancora non esiste un avversario
     game->pending_invite_from = -1;
-    game->current_turn = -1;
-    game->creator_ready = false;
+    game->current_turn = -1;  
+    game->creator_ready = false; //perchè ancora non c'è nessun invito
     game->opponent_ready = false;
     game->creator_wants_rematch = false;
     game->opponent_wants_rematch = false;
@@ -77,26 +77,29 @@ void reset_game_for_rematch(Game *game) {
     game->winner_id = -1;
     game->pending_invite_from = -1;
     game->last_activity = time(NULL);
+    //le board vengono resettate in handle_rematch() 
 }
 
 void generate_game_code(char *code, size_t len) {
     if (!code || len < 7) return;
-
+//quindi puo utilizzare A-Z e 0-9
     static const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     static int seeded = 0;
 
     if (!seeded) {
-        srand((unsigned int)time(NULL));
+        srand((unsigned int)time(NULL)); 
         seeded = 1;
     }
 
     for (size_t i = 0; i < 6; i++) {
+        //Genera 6 caratteri casuali per il codice 
         code[i] = charset[rand() % (sizeof(charset) - 1)];
     }
-    code[6] = '\0';
+    code[6] = '\0'; //l'ultimo carattere è il terminatore di stringa
 }
 
 static bool ships_overlap(const Ship *ship1, int r1, int c1, int r2, int c2) {
+    // Verifica se le coordinate (r1, c1) e (r2, c2) si sovrappongono con la nave ship1
     int min_r = (r1 < r2) ? r1 : r2;
     int max_r = (r1 > r2) ? r1 : r2;
     int min_c = (c1 < c2) ? c1 : c2;
@@ -114,19 +117,21 @@ static bool ships_overlap(const Ship *ship1, int r1, int c1, int r2, int c2) {
 }
 
 PlacementResult place_ship(Board *board, int start_row, int start_col, int end_row, int end_col) {
+    //controllo se il puntatore board è valido
     if (!board) return PLACEMENT_INVALID_SIZE;
 
+    //controllo se sono già state posizionate tutte le navi
     if (board->ships_placed >= MAX_SHIPS) {
         return PLACEMENT_ALL_PLACED;
     }
-
+    //controllo se le coordinate sono valide e all'interno della griglia
     if (start_row < 0 || start_row >= GRID_SIZE ||
         start_col < 0 || start_col >= GRID_SIZE ||
         end_row < 0 || end_row >= GRID_SIZE ||
         end_col < 0 || end_col >= GRID_SIZE) {
         return PLACEMENT_OUT_OF_BOUNDS;
     }
-
+    //controllo se la nave è allineata orizzontalmente o verticalmente
     bool is_horizontal = (start_row == end_row);
     bool is_vertical = (start_col == end_col);
 
@@ -136,22 +141,24 @@ PlacementResult place_ship(Board *board, int start_row, int start_col, int end_r
 
     int size;
     if (is_horizontal) {
+        // Calcolo la dimensione della nave in base alle coordinate fornite
+        //abs restituisce il valore assoluto di un numero intero
         size = abs(end_col - start_col) + 1;
     } else {
         size = abs(end_row - start_row) + 1;
     }
-
+    
     int expected_size = SHIP_SIZES[board->ships_placed];
     if (size != expected_size) {
         return PLACEMENT_INVALID_SIZE;
     }
-
+    //Controllo tutte le navi già posizionate per verificare se c'è sovrapposizione
     for (int i = 0; i < board->ships_placed; i++) {
         if (ships_overlap(&board->ships[i], start_row, start_col, end_row, end_col)) {
             return PLACEMENT_OVERLAP;
         }
     }
-
+    //Se tutti i controlli sono superati, posiziono la nave sulla griglia
     Ship *ship = &board->ships[board->ships_placed];
     ship->start_row = start_row;
     ship->start_col = start_col;
@@ -175,11 +182,11 @@ PlacementResult place_ship(Board *board, int start_row, int start_col, int end_r
     board->ships_placed++;
     return PLACEMENT_OK;
 }
-
 bool all_ships_placed(const Board *board) {
     return board && board->ships_placed >= MAX_SHIPS;
 }
-
+//Restituisce la dimensione della prossima nave da posizionare, oppure 0 se 
+// tutte le navi sono già state posizionate.
 int get_next_ship_size(const Board *board) {
     if (!board || board->ships_placed >= MAX_SHIPS) return 0;
     return SHIP_SIZES[board->ships_placed];
@@ -201,45 +208,57 @@ static Ship* find_ship_at(Board *board, int row, int col) {
 }
 
 FireResult process_fire(Board *target_board, Board *attacker_board, int row, int col, int *sunk_ship_size) {
+    //FireResult può essere FIRE_MISS, FIRE_HIT, FIRE_SUNK o FIRE_INVALID.
+    //La funzione riceve quindi la board avversario, la board del giocatore che spara, 
+    // le coordinate e un puntatore a un intero per restituire la dimensione della nave affondata 
+    // (se c'è stata una nave affondata).
     if (!target_board || !attacker_board) return FIRE_INVALID;
 
     if (!is_valid_coords(row, col)) {
         return FIRE_INVALID;
     }
-
+    //controllo se ho gia sparato in quella cella, se si ritorna FIRE_INVALID
     if (is_already_fired(attacker_board, row, col)) {
         return FIRE_INVALID;
     }
-
+    //leggiamo lo stato della cella nella board avversario
     CellState cell = target_board->cells[row][col];
-
-    if (cell == CELL_SHIP) {
+//Lo stato della cella può essere CELL_EMPTY, CELL_SHIP, CELL_HIT o CELL_MISS.
+    if (cell == CELL_SHIP) { 
+//In questo caso abbiamo colpito una nave, quindi aggiorniamo entrambe le board
         target_board->cells[row][col] = CELL_HIT;
         attacker_board->enemy_view[row][col] = CELL_HIT;
-
+//Troviamo quale nave è stata colpita e aggiorniamo il numero di colpi subiti
+//Questo perchè CELL_SHIP non ci dice quale nave è stata colpita, 
+//quindi dobbiamo cercare la nave che occupa quella cella. Ship[1] ha dimensione 2, 
+// Ship[2] ha dimensione 3 ecc.
         Ship *ship = find_ship_at(target_board, row, col);
         if (ship) {
             ship->hits++;
+//Controlliamo se la nave è affondata confrontando il numero di colpi subiti con la dimensione della nave
             if (ship->hits >= ship->size) {
-                ship->is_sunk = true;
-                target_board->ships_remaining--;
+                ship->is_sunk = true; //Nav e affondata
+                target_board->ships_remaining--; //Diminuiamo il numero di navi rimanenti
                 if (sunk_ship_size) {
-                    *sunk_ship_size = ship->size;
+                    *sunk_ship_size = ship->size; //Restituiamo la dimensione della nave affondata
                 }
                 return FIRE_SUNK;
             }
         }
+        //Se non è affondata, restituiamo FIRE_HIT
         return FIRE_HIT;
     } else if (cell == CELL_EMPTY) {
         target_board->cells[row][col] = CELL_MISS;
         attacker_board->enemy_view[row][col] = CELL_MISS;
         return FIRE_MISS;
     }
-
+    //Questo rende la funzione robusta contro eventuali errori di stato della cella,
+    //Cioe nel caso la cella sia già stata colpita o abbia uno stato non valido, restituisce FIRE_INVALID.
     return FIRE_INVALID;
 }
 
 bool check_victory(const Board *target_board) {
+    //Controlla se tutte le navi sono state affondate, quindi se il giocatore ha vinto.
     return target_board && target_board->ships_remaining <= 0;
 }
 
@@ -252,7 +271,8 @@ bool is_already_fired(const Board *attacker_board, int row, int col) {
     CellState view = attacker_board->enemy_view[row][col];
     return view == CELL_HIT || view == CELL_MISS;
 }
-
+//Questa funzione converte le coordinate in formato stringa (es. "A5") in coordinate numeriche 
+// (riga e colonna).
 bool parse_coords(const char *coords_str, int *row, int *col) {
     if (!coords_str || !row || !col) return false;
     size_t len = strlen(coords_str);
@@ -268,7 +288,8 @@ bool parse_coords(const char *coords_str, int *row, int *col) {
 
     return true;
 }
-
+//Questa stampa la board in console, mostrando le navi se show_ships è true, 
+// altrimenti mostra solo i colpi effettuati.
 void print_board(const Board *board, bool show_ships) {
     if (!board) return;
 
