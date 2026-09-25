@@ -9,7 +9,7 @@
  * dalla palette originale che da quella militare. I NOMI delle macro
  * restano invariati apposta: sono usati anche in client.c, quindi
  * cambiando solo i valori qui dentro il tema si propaga ovunque senza
- * toccare altro codice.
+ * toccare altro codice
  */
 #define COLOR_RESET   "\033[0m"
 #define COLOR_RED     "\033[38;5;203m"  /* corallo - colpi/errori */

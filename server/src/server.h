@@ -17,5 +17,4 @@ typedef struct {
 bool server_init(Server *server, int port);
 void server_start(Server *server);
 void server_stop(Server *server);
-
 #endif

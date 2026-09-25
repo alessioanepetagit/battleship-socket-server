@@ -7,8 +7,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <signal.h>
 #define VERSION "1.1.0"
+
+static void handle_sigint(int sig) {
+    (void)sig;
+    g_sigint_received = 1;
+}
 
 static void print_usage(const char *prog) {
     printf("Uso: %s [opzioni]\n", prog);
@@ -58,13 +63,13 @@ int main(int argc, char *argv[]) {
 
     Client client;
     client_init(&client);
+    signal(SIGINT, handle_sigint);
 
     if (client_connect(&client, host, port) < 0) {
         ui_show_error("Impossibile connettersi al server");
         printf("  Verifica che il server sia in esecuzione (%s:%d).\n\n", host, port);
         return 1;
     }
-
     client_run(&client);
     return 0;
 }

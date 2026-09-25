@@ -1,46 +1,24 @@
-# Sfida Navale - Progetto di Laboratorio di Sistemi Operativi
+# 🚢 Sfida Navale - Sistema Client-Server
 
-Server multi-client in C per giocare a Battaglia Navale, con client a riga di
-comando. Comunicazione via **socket TCP** (niente websocket), un **thread per
-client** lato server, memoria condivisa protetta da **mutex**, avvio tramite
-**docker-compose**.
+Progetto per il corso di Laboratorio di Sistemi Operativi.
 
----
+## 📋 Descrizione
 
-## 1. Struttura del progetto
+Sistema multiplayer per il gioco Battaglia Navale, composto da:
+- **Server** in C: gestisce più partite in parallelo, un thread per client, sincronizzazione con mutex, validazione delle mosse lato server
+- **Client CLI** in C: interfaccia a riga di comando con griglie colorate
 
-```
-BattagliaNavale_Rossi/
-├── docker-compose.yml       # server + due client
-├── Makefile                 # compilazione locale senza Docker
-├── server/
-│   ├── Dockerfile
-│   └── src/
-│       ├── main.c            # parsing argomenti, avvio
-│       ├── server.c/.h       # socket, bind, listen, accept, segnali
-│       ├── client_handler.c/.h # thread worker: un thread per client
-│       ├── game_manager.c/.h   # tabelle condivise giocatori/partite + mutex
-│       ├── game_logic.c/.h     # regole del gioco (griglia, navi, colpi)
-│       └── protocol.c/.h       # formato dei messaggi, send/receive
-└── client/
-    ├── Dockerfile
-    └── src/
-        ├── main.c            # parsing argomenti / variabili d'ambiente
-        ├── client.c/.h       # socket, thread ricevente, macchina a stati
-        └── ui.c/.h           # interfaccia testuale (griglie, menu, colori)
-```
+Client e server comunicano tramite **socket TCP** (nessuna websocket), con un protocollo testuale a righe (`COMANDO|PARAM1|PARAM2|...\n`).
 
----
+## 🚀 Avvio Rapido
 
-## 2. Come si avvia
-
-### Con Docker (modo previsto dalla traccia)
+### Con Docker Compose (modalità consigliata)
 
 ```bash
-# 1. avvia il server in background
+# 1. Avvia il server in background
 docker compose up -d --build server
 
-# 2. in due terminali diversi, avvia i due client
+# 2. In due terminali diversi, avvia i due client
 docker compose run --rm client1
 docker compose run --rm client2
 
@@ -48,68 +26,111 @@ docker compose run --rm client2
 docker compose down
 ```
 
-I client si collegano al server usando il nome di servizio `server` sulla rete
-`battleship-net` creata da compose (le variabili `SERVER_HOST` e `SERVER_PORT`
-sono impostate nel `docker-compose.yml`).
+I client si collegano al server usando il nome del servizio `server` sulla rete
+`battleship-net` creata da Compose (variabili d'ambiente `SERVER_HOST` e
+`SERVER_PORT`, già impostate nel `docker-compose.yml`).
 
 ### In locale, senza Docker
 
 ```bash
-make                 # compila server e client
-./server/server -p 8080      # terminale 1
-./client/client              # terminale 2  (default 127.0.0.1:8080)
-./client/client              # terminale 3
+make                          # compila server e client
+./server/server -p 8080       # terminale 1
+./client/client                # terminale 2  (default 127.0.0.1:8080)
+./client/client                # terminale 3, per il secondo giocatore
 ```
 
----
+Oppure specificando host e porta esplicitamente:
+```bash
+./client/client -h 127.0.0.1 -p 8080
+```
 
-## 3. Come si gioca
+## 🎮 Come Giocare
 
-1. Ogni client sceglie un **nickname** (deve essere unico sul server).
-2. Dalla lobby:
-   - `1` crea una nuova sfida e stampa il **codice partita** (6 caratteri);
-   - `2` elenca le sfide aperte;
-   - `3` entra in una sfida inserendo il codice;
-   - `q` esce dal gioco.
-3. Chi ha creato la partita riceve la richiesta e risponde
-   `accept <nickname>` oppure `reject <nickname>`.
-4. **Fase di posizionamento**: cinque navi, in quest'ordine di lunghezza
-   5, 4, 3, 3, 2. Formato `riga1,colonna1,riga2,colonna2`, ad esempio
+1. **Login**: scegli un nickname (deve essere unico tra i giocatori connessi)
+2. **Lobby**:
+   - `1` crea una nuova sfida e mostra il codice partita (6 caratteri)
+   - `2` mostra le sfide aperte in attesa di un avversario
+   - `3` entra in una sfida inserendo il codice
+   - `q` esce dal gioco
+3. Chi ha creato la partita riceve la richiesta di un altro giocatore e risponde
+   `accept <nickname>` per accettarla oppure `reject <nickname>` per rifiutarla
+4. **Posizionamento navi**: 5 navi da posizionare in ordine, lunghezze 5, 4, 3, 3, 2.
+   Formato `riga_inizio,colonna_inizio,riga_fine,colonna_fine`, ad esempio
    `1,A,1,E` (orizzontale) o `3,B,6,B` (verticale). Righe 1-10, colonne A-J.
-   È il **server** a verificare bordi, allineamento, lunghezza e sovrapposizioni.
-5. **Fase di combattimento**: si spara con `riga,colonna` (es. `5,C`).
-   Il server alterna i turni e risponde `HIT`, `MISS` o `SUNK`.
-6. **Fine partita**: chi affonda tutte le navi avversarie riceve `YOU_WIN`,
-   l'altro `YOU_LOSE`. A entrambi viene chiesto se vogliono la rivincita:
-   `y` per rigiocare con lo stesso avversario, `n` per tornare in lobby.
-   La partita riparte solo se **entrambi** rispondono `y`.
+   È il **server** a validare bordi, allineamento, lunghezza e sovrapposizioni.
+5. **Combattimento**: si spara con `riga,colonna` (es. `5,C`). Il server alterna
+   i turni e risponde con `COLPITO`, `MANCATO` o `AFFONDATA`.
+6. **Fine partita**: chi affonda tutte le navi avversarie vince, l'altro perde.
+   A entrambi viene chiesto se vogliono la rivincita: `y` per rigiocare con lo
+   stesso avversario, `n` per tornare in lobby. La partita riparte solo se
+   **entrambi** rispondono `y`.
 
----
 
-## 4. Protocollo applicativo
+## 📁 Struttura Progetto
 
-Messaggi di testo terminati da `\n`, campi separati da `|`.
+```
+battleship-socket-server/
+├── server/                     # Server C
+│   ├── src/
+│   │   ├── main.c              # Entry point server, parsing argomenti
+│   │   ├── server.c/.h         # Socket, bind, listen, accept, segnali
+│   │   ├── client_handler.c/.h # Thread worker: un thread per client
+│   │   ├── game_manager.c/.h   # Tabelle condivise giocatori/partite + mutex
+│   │   ├── game_logic.c/.h     # Regole del gioco (griglia, navi, colpi)
+│   │   └── protocol.c/.h       # Formato dei messaggi, send/receive
+│   └── Dockerfile
+├── client/                     # Client CLI in C
+│   ├── src/
+│   │   ├── main.c              # Entry point client, parsing argomenti/env
+│   │   ├── client.c/.h         # Socket, thread ricevente, macchina a stati
+│   │   └── ui.c/.h             # Interfaccia testuale (griglie, menu, colori)
+│   └── Dockerfile
+├── Makefile                    # Compilazione locale senza Docker
+├── docker-compose.yml          # server + due client
+└── README.md
+```
 
-### Comandi (client -> server)
+## 🔧 Opzioni Linea di Comando
 
-| Comando | Formato | Significato |
-|---|---|---|
-| LOGIN | `LOGIN\|nickname` | registra il nickname |
-| CREATE_GAME | `CREATE_GAME` | crea una partita |
-| LIST_GAMES | `LIST_GAMES` | elenca le partite in attesa |
-| JOIN_GAME | `JOIN_GAME\|codice` | chiede di partecipare |
-| ACCEPT_INVITE | `ACCEPT_INVITE\|nickname\|id` | il creatore accetta |
-| REJECT_INVITE | `REJECT_INVITE\|nickname\|id` | il creatore rifiuta |
-| PLACE_SHIP | `PLACE_SHIP\|r1\|c1\|r2\|c2` | posiziona una nave (indici 0-9) |
-| READY | `READY` | flotta completata |
-| FIRE | `FIRE\|riga\|colonna` | spara (indici 0-9) |
-| LEAVE_GAME | `LEAVE_GAME` | esce dalla partita, resta connesso |
-| REMATCH | `REMATCH` | chiede la rivincita |
-| REMATCH_DECLINE | `REMATCH_DECLINE` | rifiuta la rivincita, torna in lobby |
-| QUIT | `QUIT` | chiude la sessione |
+### Server
+```
+./server [opzioni]
+  -p, --port PORT    Porta di ascolto (default: 8080)
+  --help             Mostra aiuto
+```
 
-### Risposte (server -> client)
+### Client
+```
+./client [opzioni]
+  -h, --host HOST    Indirizzo o nome del server (default: 127.0.0.1)
+  -p, --port PORT    Porta del server (default: 8080)
+  --help             Mostra aiuto
+```
+In alternativa, host e porta possono essere impostati con le variabili
+d'ambiente `SERVER_HOST` e `SERVER_PORT` (usate da Docker Compose).
 
+## 🔌 Protocollo di Comunicazione
+
+Messaggi testuali terminati da `\n`, campi separati da `|`: `COMANDO|PARAM1|PARAM2|...\n`
+
+### Comandi (client → server)
+| Comando | Formato | Descrizione |
+|---------|---------|-------------|
+| LOGIN | `LOGIN\|nickname` | Registra il nickname |
+| CREATE_GAME | `CREATE_GAME` | Crea una nuova partita |
+| LIST_GAMES | `LIST_GAMES` | Elenca le partite in attesa |
+| JOIN_GAME | `JOIN_GAME\|codice` | Richiede di partecipare a una partita |
+| ACCEPT_INVITE | `ACCEPT_INVITE\|nickname` | Il creatore accetta la richiesta |
+| REJECT_INVITE | `REJECT_INVITE\|nickname` | Il creatore rifiuta la richiesta |
+| PLACE_SHIP | `PLACE_SHIP\|r1\|c1\|r2\|c2` | Posiziona una nave (indici 0-9) |
+| READY | `READY` | Segnala che la flotta è completa |
+| FIRE | `FIRE\|riga\|colonna` | Spara (indici 0-9) |
+| LEAVE_GAME | `LEAVE_GAME` | Esce dalla partita, resta connesso in lobby |
+| REMATCH | `REMATCH` | Chiede la rivincita |
+| REMATCH_DECLINE | `REMATCH_DECLINE` | Rifiuta la rivincita, torna in lobby |
+| QUIT | `QUIT` | Chiude la sessione |
+
+### Risposte principali (server → client)
 `OK`, `ERROR|codice|descrizione`, `WELCOME|id`, `GAME_CREATED|codice`,
 `GAME_LIST|cod:nick,cod:nick`, `JOIN_REQUEST|nick|id`, `JOIN_ACCEPTED|codice`,
 `JOIN_REJECTED`, `SHIP_PLACED|n|r1|c1|r2|c2`, `INVALID_PLACEMENT|motivo`,
@@ -117,52 +138,26 @@ Messaggi di testo terminati da `\n`, campi separati da `|`.
 `ENEMY_FIRE|r|c|esito`, `YOU_WIN`, `YOU_LOSE`, `OPPONENT_DISCONNECTED`,
 `PLAY_AGAIN_PROMPT`, `REMATCH_REQUEST`, `REMATCH_REJECTED`, `BACK_TO_LOBBY`.
 
-### Codici di errore principali
+## ⚙️ Caratteristiche Tecniche
 
-`100` comando non valido, `101` parametri non validi, `200` nickname occupato,
-`201` login mancante, `300` partita non trovata, `301` partita piena,
-`302` non è il tuo turno, `304` cella già colpita, `305` rivincita non
-disponibile, `306` nessuna richiesta pendente, `307` non puoi unirti alla tua
-partita, `308` azione non consentita nello stato attuale, `500` server pieno.
+- **Concorrenza**: un thread POSIX per ogni client (`pthread_create` +
+  `pthread_detach`), così il sistema regge più partite/client simultanei
+- **Sincronizzazione**: mutex separati per la tabella giocatori, per la tabella
+  partite, e uno per ogni singolo giocatore/partita, per non serializzare
+  inutilmente client che non stanno interagendo tra loro
+- **Prevenzione deadlock**: quando un'operazione richiede il lock di due
+  giocatori insieme (es. il colpo sparato, che tocca sia l'attaccante che il
+  difensore), i lock vengono presi sempre in ordine canonico (prima l'id più
+  basso), così non si può formare un'attesa circolare
+- **Gestione segnali**: `SIGINT`/`SIGTERM` intercettati per uno shutdown
+  pulito, `SIGPIPE` ignorato così una scrittura su un socket già chiuso non
+  termina il processo
+- **Rilevamento disconnessioni**: una `read()` che ritorna 0 viene trattata
+  come disconnessione del client: l'avversario viene avvisato, la partita
+  chiusa e lo slot liberato
+- **Limiti**: massimo 64 giocatori connessi e 32 partite contemporanee
+  (oltre questa soglia il server risponde con l'errore "server pieno")
 
----
+## 📝 Author
 
-## 5. Scelte implementative (sistemi operativi)
-
-- **Socket TCP**: `socket(AF_INET, SOCK_STREAM, 0)`, `bind()`, `listen()`,
-  `accept()`, `read()`/`write()`. Sul client `inet_aton()` e, se l'host non è
-  numerico (caso Docker), `gethostbyname()`.
-- **Concorrenza**: dopo ogni `accept()` il server fa `pthread_create()` +
-  `pthread_detach()`, così il thread libera da solo le proprie risorse.
-- **Sincronizzazione**: un mutex globale per la tabella dei giocatori, uno per
-  la tabella delle partite, più un mutex per ogni giocatore e per ogni partita.
-  I mutex degli slot vengono creati una volta sola in `gm_init()` e distrutti
-  solo in `gm_destroy()`: gli slot vengono riusati, mai "smontati" mentre un
-  altro thread potrebbe averne il puntatore.
-- **Prevenzione del deadlock**: quando servono due lock contemporaneamente
-  (colpo sparato: board dell'attaccante + board del difensore) si acquisiscono
-  sempre in **ordine canonico**, prima il giocatore con id minore. Così non può
-  formarsi attesa circolare.
-- **Segnali**: `SIGPIPE` ignorato (scrivere su un socket chiuso restituisce -1
-  con `EPIPE` invece di uccidere il processo), `SIGINT`/`SIGTERM` intercettati
-  con `sigaction()` per lo shutdown pulito (chiusura del socket di ascolto e
-  deallocazione delle strutture).
-- **Rilevamento disconnessioni**: `read()` che restituisce 0 significa EOF,
-  cioè client scollegato: il server avvisa l'avversario, chiude la partita e
-  libera lo slot.
-- **Lato client**: un thread ricevente separato legge i messaggi asincroni
-  (turni, colpi, inviti) mentre il thread principale legge l'input con
-  `select()` e timeout di 100 ms, così un cambio di stato non lascia l'utente
-  bloccato su un prompt vecchio. Le `write()` sul socket sono protette da un
-  mutex perché entrambi i thread possono inviare.
-
----
-
-## 6. Limiti noti
-
-- Massimo 64 giocatori connessi e 32 partite contemporanee (`MAX_PLAYERS`,
-  `MAX_GAMES`): oltre, il server risponde con l'errore 500.
-- Le navi vanno posizionate nell'ordine fisso 5, 4, 3, 3, 2.
-- Non è implementata la funzionalità opzionale "attendi che un altro
-  giocatore si unisca dopo l'abbandono dell'avversario": alla caduta di un
-  giocatore la partita viene chiusa e l'altro torna in lobby.
+  Alessio Anepeta : https://github.com/alessioanepetagit/alessioanepetagit

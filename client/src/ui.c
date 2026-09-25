@@ -1,5 +1,5 @@
 /*
- * ui.c - Implementazione interfaccia utente terminale
+ * ui.c è Implementazione interfaccia utente terminale
  */
 
 #include "ui.h"

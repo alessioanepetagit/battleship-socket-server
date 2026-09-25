@@ -13,9 +13,11 @@
 #include <arpa/inet.h>
 #include <netdb.h>      
 #include <pthread.h>
+#include <signal.h>
+volatile sig_atomic_t g_sigint_received = 0;
 
 static const int SHIP_SIZES[5] = {5, 4, 3, 3, 2};
-
+//Utente inserisce 1,A,1,E e il client manda PLACE_SHIP|0|0|0|4 al server
 static bool parse_coords_input(const char *input, int *r1, int *c1, int *r2, int *c2) {
     char col1_char, col2_char;
     if (sscanf(input, "%d,%c,%d,%c", r1, &col1_char, r2, &col2_char) != 4) {
@@ -39,7 +41,7 @@ static bool parse_coords_input(const char *input, int *r1, int *c1, int *r2, int
 
     return true;
 }
-
+//L'utente inserisce 5,C e il client manda FIRE|4|2 al server
 static bool parse_fire_input(const char *input, int *row, int *col) {
     char col_char;
     if (sscanf(input, "%d,%c", row, &col_char) != 2) {
@@ -55,7 +57,7 @@ static bool parse_fire_input(const char *input, int *row, int *col) {
 
     return true;
 }
-
+//Modifica la copia locale della board del client con le coordinate della nave appena posizionata
 static void update_my_board_with_ship(Client *client, int r1, int c1, int r2, int c2) {
     int min_r = (r1 < r2) ? r1 : r2;
     int max_r = (r1 > r2) ? r1 : r2;
@@ -68,7 +70,7 @@ static void update_my_board_with_ship(Client *client, int r1, int c1, int r2, in
         }
     }
 }
-
+//Azzera lo stato locale delle due board (Rivincita o nuova partita)
 static void clear_boards(Client *client) {
     client->ships_placed = 0;
     for (int r = 0; r < GRID_SIZE; r++) {
@@ -79,12 +81,15 @@ static void clear_boards(Client *client) {
     }
 }
 
-
+//
 static bool wait_for_command(Client *client, ClientState expected_state, char *buffer, size_t buf_size) {
     printf(COLOR_CYAN "> " COLOR_RESET);
     fflush(stdout);
 
     while (client->state == expected_state) {
+        if(g_sigint_received) {
+            return false;
+        }
         fd_set fds;
         struct timeval tv;
         FD_ZERO(&fds);
@@ -431,6 +436,8 @@ static void handle_response(Client *client, const char *response) {
     pthread_mutex_unlock(&client->ui_lock);
 }
 
+
+
 typedef struct {
     Client *client;
     volatile bool *running;
@@ -474,7 +481,7 @@ void client_run(Client *client) {
 
     char input[256];
 
-    while (running && client->state != CLIENT_DISCONNECTED) {
+    while (running && client->state != CLIENT_DISCONNECTED && !g_sigint_received) {
         switch (client->state) {
             case CLIENT_CONNECTED: {
                 char username[MAX_USERNAME];
