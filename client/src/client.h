@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <pthread.h>
-#include <signal.h>
 
 #define DEFAULT_SERVER_HOST "127.0.0.1"
 #define DEFAULT_SERVER_PORT 8080
@@ -46,12 +45,13 @@ typedef struct {
                                   due send() concorrenti potrebbero
                                   interfogliarsi sullo stesso stream TCP */
 } Client;
-extern volatile sig_atomic_t g_sigint_received;
+
 void client_init(Client *client);
 int client_connect(Client *client, const char *host, int port);
 void client_disconnect(Client *client);
 int client_send(Client *client, const char *message);
 int client_receive(Client *client, char *buffer, size_t buf_size);
 void client_run(Client *client);
+void client_setup_signals(void);   /* CTRL+C / SIGTERM -> chiusura ordinata */
 
 #endif

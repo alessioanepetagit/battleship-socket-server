@@ -14,10 +14,42 @@
 #include <netdb.h>      
 #include <pthread.h>
 #include <signal.h>
-volatile sig_atomic_t g_sigint_received = 0;
 
 static const int SHIP_SIZES[5] = {5, 4, 3, 3, 2};
-//Utente inserisce 1,A,1,E e il client manda PLACE_SHIP|0|0|0|4 al server
+
+/*
+ * Gestione di CTRL+C (SIGINT) e SIGTERM.
+ *
+ * Nel container il client e' il PID 1 (CMD ["./client"]). Il kernel scarta
+ * i segnali destinati a PID 1 che non hanno un handler installato, quindi
+ * senza questo codice CTRL+C non fa nulla: il terminale mostra solo "^C".
+ *
+ * L'handler si limita ad alzare un flag (unica cosa async-signal-safe che
+ * ci serve): la chiusura vera avviene nel thread principale, in client_run().
+ * Non usiamo SA_RESTART, cosi' select()/fgets() bloccati vengono interrotti
+ * (EINTR) e il ciclo principale si accorge subito del flag.
+ */
+static volatile sig_atomic_t g_stop_requested = 0;
+
+static void on_stop_signal(int sig) {
+    (void)sig;
+    g_stop_requested = 1;
+}
+
+void client_setup_signals(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = on_stop_signal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;                 /* niente SA_RESTART, vedi sopra */
+    sigaction(SIGINT,  &sa, NULL);   /* CTRL+C */
+    sigaction(SIGTERM, &sa, NULL);   /* docker stop / docker compose down */
+
+    /* se il server sparisce, write() deve fallire con EPIPE (gia' gestito
+       da client_send) invece di uccidere il client con SIGPIPE */
+    signal(SIGPIPE, SIG_IGN);
+}
+
 static bool parse_coords_input(const char *input, int *r1, int *c1, int *r2, int *c2) {
     char col1_char, col2_char;
     if (sscanf(input, "%d,%c,%d,%c", r1, &col1_char, r2, &col2_char) != 4) {
@@ -41,7 +73,7 @@ static bool parse_coords_input(const char *input, int *r1, int *c1, int *r2, int
 
     return true;
 }
-//L'utente inserisce 5,C e il client manda FIRE|4|2 al server
+
 static bool parse_fire_input(const char *input, int *row, int *col) {
     char col_char;
     if (sscanf(input, "%d,%c", row, &col_char) != 2) {
@@ -57,7 +89,7 @@ static bool parse_fire_input(const char *input, int *row, int *col) {
 
     return true;
 }
-//Modifica la copia locale della board del client con le coordinate della nave appena posizionata
+
 static void update_my_board_with_ship(Client *client, int r1, int c1, int r2, int c2) {
     int min_r = (r1 < r2) ? r1 : r2;
     int max_r = (r1 > r2) ? r1 : r2;
@@ -70,7 +102,7 @@ static void update_my_board_with_ship(Client *client, int r1, int c1, int r2, in
         }
     }
 }
-//Azzera lo stato locale delle due board (Rivincita o nuova partita)
+
 static void clear_boards(Client *client) {
     client->ships_placed = 0;
     for (int r = 0; r < GRID_SIZE; r++) {
@@ -81,15 +113,12 @@ static void clear_boards(Client *client) {
     }
 }
 
-//
+
 static bool wait_for_command(Client *client, ClientState expected_state, char *buffer, size_t buf_size) {
     printf(COLOR_CYAN "> " COLOR_RESET);
     fflush(stdout);
 
-    while (client->state == expected_state) {
-        if(g_sigint_received) {
-            return false;
-        }
+    while (client->state == expected_state && !g_stop_requested) {
         fd_set fds;
         struct timeval tv;
         FD_ZERO(&fds);
@@ -164,6 +193,9 @@ int client_connect(Client *client, const char *host, int port) {
 
 void client_disconnect(Client *client) {
     if (client->socket_fd >= 0) {
+        /* close() da solo non sveglia il receiver thread bloccato in read():
+           shutdown() si', cosi' la pthread_join() finale non resta appesa */
+        shutdown(client->socket_fd, SHUT_RDWR);
         close(client->socket_fd);
         client->socket_fd = -1;
     }
@@ -436,8 +468,6 @@ static void handle_response(Client *client, const char *response) {
     pthread_mutex_unlock(&client->ui_lock);
 }
 
-
-
 typedef struct {
     Client *client;
     volatile bool *running;
@@ -471,7 +501,18 @@ void client_run(Client *client) {
     recv_args.running = &running;
     pthread_t recv_thread;
 
-    if (pthread_create(&recv_thread, NULL, receiver_thread, &recv_args) != 0) {
+    /* SIGINT/SIGTERM devono arrivare al thread principale (quello che
+       gestisce l'input), non al receiver: lo blocchiamo prima della create,
+       il nuovo thread eredita la maschera, poi la ripristiniamo qui. */
+    sigset_t stop_set, old_set;
+    sigemptyset(&stop_set);
+    sigaddset(&stop_set, SIGINT);
+    sigaddset(&stop_set, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &stop_set, &old_set);
+    int rc = pthread_create(&recv_thread, NULL, receiver_thread, &recv_args);
+    pthread_sigmask(SIG_SETMASK, &old_set, NULL);
+
+    if (rc != 0) {
         ui_show_error("Impossibile avviare la connessione");
         return;
     }
@@ -481,11 +522,12 @@ void client_run(Client *client) {
 
     char input[256];
 
-    while (running && client->state != CLIENT_DISCONNECTED && !g_sigint_received) {
+    while (running && !g_stop_requested && client->state != CLIENT_DISCONNECTED) {
         switch (client->state) {
             case CLIENT_CONNECTED: {
                 char username[MAX_USERNAME];
                 ui_prompt_login(username, sizeof(username));
+                if (g_stop_requested) break;   /* CTRL+C al prompt del nickname */
 
                 char login_msg[MAX_MESSAGE_LEN];
                 snprintf(login_msg, sizeof(login_msg), "LOGIN|%s\n", username);
@@ -649,6 +691,12 @@ void client_run(Client *client) {
                 usleep(50000);
                 break;
         }
+    }
+
+    if (g_stop_requested) {
+        printf("\n" COLOR_YELLOW "  Disconnessione in corso..." COLOR_RESET "\n");
+        fflush(stdout);
+        client_send(client, "QUIT\n");   /* il server la tratta come una disconnessione */
     }
 
     running = false;
