@@ -463,6 +463,24 @@ static void handle_response(Client *client, const char *response) {
         ui_show_lobby_menu();
     } else if (strcmp(cmd, "OPPONENT_DISCONNECTED") == 0) {
         ui_show_error("Il tuo avversario ha lasciato la partita!");
+        client->state = CLIENT_OPPONENT_DISCONNECTED;
+        ui_prompt_opponent_left();
+        printf("> ");
+        fflush(stdout);
+    } else if (strcmp(cmd, "WAITING_NEW_PLAYER") == 0) {
+        char *code = strtok_r(NULL, "|", &saveptr);
+        if (code) {
+            clear_boards(client);
+            strncpy(client->current_game_code, code, sizeof(client->current_game_code) - 1);
+            client->state = CLIENT_WAITING_OPPONENT;
+            ui_clear_screen();
+            ui_show_banner();
+            ui_show_success("Partita di nuovo aperta!");
+            printf("  Codice sfida: " COLOR_GREEN COLOR_BOLD "%s" COLOR_RESET "\n", code);
+            printf("  In attesa che un altro giocatore si unisca...\n");
+            printf(COLOR_GRAY "  (Digita 'q' per annullare e tornare in lobby)\n\n" COLOR_RESET);
+            fflush(stdout);
+        }
     }
 
     pthread_mutex_unlock(&client->ui_lock);
@@ -533,11 +551,11 @@ void client_run(Client *client) {
                 snprintf(login_msg, sizeof(login_msg), "LOGIN|%s\n", username);
                 ui_show_status("Mi collego al server...");
 
+                strncpy(client->username, username, sizeof(client->username) - 1);
+                client->state = CLIENT_WAITING_LOGIN;
                 if (client_send(client, login_msg) < 0) {
                     ui_show_error("Errore durante il login");
                 }
-                strncpy(client->username, username, sizeof(client->username) - 1);
-                client->state = CLIENT_WAITING_LOGIN;
                 break;
             }
 
@@ -594,8 +612,8 @@ void client_run(Client *client) {
                 } else if (strcmp(input, "q") == 0 || strcmp(input, "quit") == 0) {
                     if (client->state == CLIENT_WAITING_OPPONENT) {
           
-                        client_send(client, "LEAVE_GAME\n");
                         client->state = CLIENT_WAITING_SERVER;
+                        client_send(client, "LEAVE_GAME\n");
                     } else {
                         client_send(client, "QUIT\n");
                         running = false;
@@ -617,8 +635,8 @@ void client_run(Client *client) {
 
                     /* si puo' abbandonare anche durante il posizionamento */
                     if (strcmp(input, "quit") == 0) {
-                        client_send(client, "LEAVE_GAME\n");
                         client->state = CLIENT_WAITING_SERVER;
+                        client_send(client, "LEAVE_GAME\n");
                         break;
                     }
 
@@ -648,8 +666,8 @@ void client_run(Client *client) {
                 if (!wait_for_command(client, CLIENT_MY_TURN, input, sizeof(input))) continue;
 
                 if (strcmp(input, "quit") == 0) {
-                    client_send(client, "LEAVE_GAME\n");   
                     client->state = CLIENT_WAITING_SERVER;
+                    client_send(client, "LEAVE_GAME\n");
                 } else {
                     int row, col;
                     if (parse_fire_input(input, &row, &col)) {
@@ -663,20 +681,37 @@ void client_run(Client *client) {
                     }
                 }
                 break;
-
+            case CLIENT_OPPONENT_DISCONNECTED:
+                if (!wait_for_command(client, CLIENT_OPPONENT_DISCONNECTED, input, sizeof(input))) continue;
+                if (strcmp(input, "w") == 0 || strcmp(input, "wait") == 0) {
+                    client->state = CLIENT_WAITING_SERVER;
+                    client_send(client, "WAIT_NEW_PLAYER\n");
+                    ui_show_status("Riapro la partita, aspetto un altro giocatore...");
+                } else if (strcmp(input, "e") == 0 || strcmp(input, "end") == 0) {
+                    client->state = CLIENT_WAITING_SERVER;
+                    client_send(client, "LEAVE_GAME\n");
+                } else if (strlen(input) > 0) {
+                    pthread_mutex_lock(&client->ui_lock);
+                    ui_show_error("Risposta non valida. Digita 'w' per aspettare o 'e' per terminare.");
+                    ui_prompt_opponent_left();
+                    printf("> ");
+                    fflush(stdout);
+                    pthread_mutex_unlock(&client->ui_lock);
+                }
+                break;
             case CLIENT_GAME_OVER:
                 if (!wait_for_command(client, CLIENT_GAME_OVER, input, sizeof(input))) continue;
 
                 if (strcmp(input, "y") == 0 || strcmp(input, "yes") == 0) {
             
+                    client->state = CLIENT_WAITING_SERVER;
                     client_send(client, "REMATCH\n");
                     ui_show_status("Richiesta di rivincita inviata...");
-                    client->state = CLIENT_WAITING_SERVER;
                 } else if (strcmp(input, "n") == 0 || strcmp(input, "no") == 0) {
                     /* REMATCH_DECLINE chiude la partita ma NON la
                        connessione: si torna in lobby e si puo' ricominciare */
-                    client_send(client, "REMATCH_DECLINE\n");
                     client->state = CLIENT_WAITING_SERVER;
+                    client_send(client, "REMATCH_DECLINE\n");
                 } else if (strlen(input) > 0) {
                     pthread_mutex_lock(&client->ui_lock);
                     ui_show_error("Risposta non valida. Digita 'y' per rivincita o 'n' per tornare in lobby.");

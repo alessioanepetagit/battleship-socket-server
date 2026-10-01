@@ -25,6 +25,7 @@ typedef enum {
     CMD_REMATCH,
     CMD_REMATCH_DECLINE,
     CMD_QUIT,
+    CMD_WAIT_NEW_PLAYER,
     CMD_UNKNOWN
 } CommandType;
 
@@ -52,6 +53,7 @@ typedef enum {
     RSP_PLAY_AGAIN_PROMPT,
     RSP_REMATCH_REQUEST,
     RSP_REMATCH_REJECTED,
+    RSP_WAITING_NEW_PLAYER,
     RSP_BACK_TO_LOBBY   
                            
 } ResponseType;

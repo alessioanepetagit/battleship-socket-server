@@ -28,7 +28,8 @@ typedef enum {
     PLAYER_PLACING_SHIPS,
     PLAYER_READY,
     PLAYER_IN_GAME,
-    PLAYER_FINISHED            /* partita finita: puo' chiedere la rivincita */
+    PLAYER_FINISHED,
+    PLAYER_OPPONENT_LEFT          /* partita finita: puo' chiedere la rivincita */
 } PlayerState;
 
 typedef enum {

@@ -21,6 +21,7 @@ static const char* COMMAND_STRINGS[] = {
     "REMATCH",
     "REMATCH_DECLINE",
     "QUIT",
+    "WAIT_NEW_PLAYER",
     "UNKNOWN"
 };
 
@@ -48,6 +49,7 @@ static const char* RESPONSE_STRINGS[] = {
     "PLAY_AGAIN_PROMPT",
     "REMATCH_REQUEST",
     "REMATCH_REJECTED",
+    "WAITING_NEW_PLAYER",
     "BACK_TO_LOBBY"
 };
 

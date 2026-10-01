@@ -336,6 +336,7 @@ const char* player_state_to_string(PlayerState state) {
         case PLAYER_INVITED:          return "Invitato";
         case PLAYER_PLACING_SHIPS:    return "Posizionamento navi";
         case PLAYER_READY:            return "Pronto";
+        case PLAYER_OPPONENT_LEFT: return "Avversario caduto: in attesa di scelta";
         case PLAYER_IN_GAME:          return "In partita";
         case PLAYER_FINISHED:         return "Partita terminata";
         default:                      return "Sconosciuto";

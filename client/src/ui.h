@@ -39,5 +39,6 @@ void ui_show_fire_result(const char *result, int row, int col);
 void ui_show_game_list(const char *list);
 void ui_show_game_over(bool victory);
 void ui_prompt_rematch(void);
+void ui_prompt_opponent_left(void);
 
 #endif

@@ -253,3 +253,13 @@ void ui_prompt_rematch(void) {
     printf("  Digita " COLOR_GREEN "'y'" COLOR_RESET " per si' o " COLOR_RED "'n'" COLOR_RESET " per tornare alla lobby.\n\n");
     fflush(stdout);
 }
+
+void ui_prompt_opponent_left(void) {
+    printf("\n" COLOR_BOLD "~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~\n" COLOR_RESET);
+    printf(COLOR_YELLOW "            L'AVVERSARIO NON C'E' PIU'           \n" COLOR_RESET);
+    printf(COLOR_BOLD "~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~\n\n" COLOR_RESET);
+    printf("  Cosa vuoi fare?\n");
+    printf("  " COLOR_GREEN "'w'" COLOR_RESET " aspetta che un altro giocatore si unisca\n");
+    printf("  " COLOR_RED "'e'" COLOR_RESET " termina la partita e torna alla lobby\n\n");
+    fflush(stdout);
+}

@@ -67,6 +67,15 @@ static void reset_player_to_lobby(Player *player) {
     init_board(&player->board);
     pthread_mutex_unlock(&player->lock);
 }
+
+static void offer_choice_to_survivor(Player *survivor) {
+    pthread_mutex_lock(&survivor->lock);
+    survivor->state = PLAYER_OPPONENT_LEFT;
+    survivor->wants_rematch = false;
+    init_board(&survivor->board);
+    pthread_mutex_unlock(&survivor->lock);
+    send_simple(survivor, RSP_OPPONENT_DISCONNECTED);
+}
  
 /*
  *  una sola funzione che smonta la partita corrente.
@@ -85,6 +94,7 @@ static void leave_current_game(GameManager *gm, Player *player,
     if (game_id > 0) {
         Game *game = gm_get_game(gm, game_id);
         int opponent_id = -1;
+        bool keep_game = false; 
  
         if (game) {
             pthread_mutex_lock(&game->lock);
@@ -94,6 +104,19 @@ static void leave_current_game(GameManager *gm, Player *player,
                 opponent_id = game->creator_id;
             }
             game->state = GAME_FINISHED;
+            if (opponent_notice == RSP_OPPONENT_DISCONNECTED && opponent_id > 0) {
+                /* chi resta diventa creatore; sotto lo stesso lock, così se
+                   cadono in due il secondo trova la partita vuota e la rimuove */
+                game->creator_id = opponent_id;
+                game->opponent_id = -1;
+                game->pending_invite_from = -1;
+                game->current_turn = -1;
+                game->creator_ready = false;
+                game->opponent_ready = false;
+                game->creator_wants_rematch = false;
+                game->opponent_wants_rematch = false;
+                game->winner_id = -1;
+            }
             pthread_mutex_unlock(&game->lock);
         }
  
@@ -105,7 +128,10 @@ static void leave_current_game(GameManager *gm, Player *player,
                 bool same_game = (opponent->current_game_id == game_id);
                 pthread_mutex_unlock(&opponent->lock);
  
-                if (same_game) {
+                if (same_game && opponent_notice == RSP_OPPONENT_DISCONNECTED) {
+                    offer_choice_to_survivor(opponent);
+                    keep_game = true;
+                } else if (same_game) {
                     send_simple(opponent, opponent_notice);
                     reset_player_to_lobby(opponent);
                     send_simple(opponent, RSP_BACK_TO_LOBBY);
@@ -113,7 +139,7 @@ static void leave_current_game(GameManager *gm, Player *player,
             }
         }
  
-        if (game) {
+        if (game && !keep_game) {               /* era: if (game) */
             gm_remove_game(gm, game_id);
         }
     }
@@ -770,6 +796,48 @@ static void handle_rematch_decline(GameManager *gm, Player *player) {
     }
     leave_current_game(gm, player, RSP_REMATCH_REJECTED, true);
 }
+
+static void handle_wait_new_player(GameManager *gm, Player *player) {
+    char resp[MAX_MESSAGE_LEN];
+    if (get_player_state(player) != PLAYER_OPPONENT_LEFT) {
+        send_error(player, ERR_WRONG_STATE);
+        return;
+    }
+    Game *g = gm_get_game(gm, get_player_game_id(player));
+    if (!g) {
+        send_error(player, ERR_GAME_NOT_FOUND);
+        reset_player_to_lobby(player);
+        send_simple(player, RSP_BACK_TO_LOBBY);
+        return;
+    }
+    pthread_mutex_lock(&g->lock);
+    bool valid = (g->state == GAME_FINISHED &&
+                  g->creator_id == player->id &&
+                  g->opponent_id == -1);
+    char code[GAME_CODE_LEN];
+    strncpy(code, g->game_code, sizeof(code) - 1);
+    code[sizeof(code) - 1] = '\0';
+    pthread_mutex_unlock(&g->lock);
+    if (!valid) { send_error(player, ERR_WRONG_STATE); return; }
+
+    pthread_mutex_lock(&player->lock);
+    player->state = PLAYER_WAITING_OPPONENT;
+    pthread_mutex_unlock(&player->lock);
+
+    build_response(RSP_WAITING_NEW_PLAYER, resp, sizeof(resp), 1, code);
+    gm_notify_player(player, resp);
+
+    /* solo ora la partita diventa visibile e accetta richieste */
+    pthread_mutex_lock(&g->lock);
+    g->state = GAME_WAITING_PLAYERS;
+    g->pending_invite_from = -1;
+    g->last_activity = time(NULL);
+    pthread_mutex_unlock(&g->lock);
+
+    char name[MAX_USERNAME];
+    gm_copy_username(player, name, sizeof(name));
+    printf("[HANDLER] Partita '%s' di nuovo aperta: '%s' aspetta un nuovo giocatore\n", code, name);
+}
  
 /* ------------------------------------------------------------------ */
 /* Thread worker                                                      */
@@ -851,6 +919,9 @@ void* client_handler_thread(void *arg) {
                 break;
             case CMD_REMATCH_DECLINE:
                 handle_rematch_decline(gm, player);
+                break;
+            case CMD_WAIT_NEW_PLAYER:
+                handle_wait_new_player(gm, player);
                 break;
             case CMD_QUIT:
                 running = false;
