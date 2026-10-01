@@ -656,11 +656,32 @@ void client_run(Client *client) {
                 break;
             }
 
-            case CLIENT_WAITING_START:
-            case CLIENT_WAITING_TURN:
             case CLIENT_WAITING_SERVER:
                 usleep(50000);
                 break;
+
+            case CLIENT_WAITING_START:
+            case CLIENT_WAITING_TURN: {
+                /* Non e' (ancora) il nostro turno: leggiamo comunque quello che il
+                   giocatore digita e lo scartiamo con un errore. Prima la riga restava
+                   nel buffer di stdin e partiva come FIRE appena toccava a noi. */
+                ClientState state_before = client->state;
+                if (!wait_for_command(client, state_before, input, sizeof(input))) continue;
+
+                if (strcmp(input, "quit") == 0) {
+                    client->state = CLIENT_WAITING_SERVER;
+                    client_send(client, "LEAVE_GAME\n");
+                } else if (strlen(input) > 0) {
+                    pthread_mutex_lock(&client->ui_lock);
+                    if (state_before == CLIENT_WAITING_START) {
+                        ui_show_error("La battaglia non e' ancora iniziata! Aspetta che l'avversario sia pronto.");
+                    } else {
+                        ui_show_error("Non e' il tuo turno! Aspetta che l'avversario abbia sparato.");
+                    }
+                    pthread_mutex_unlock(&client->ui_lock);
+                }
+                break;
+            }
 
             case CLIENT_MY_TURN:
                 if (!wait_for_command(client, CLIENT_MY_TURN, input, sizeof(input))) continue;
